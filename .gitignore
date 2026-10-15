@@ -36,3 +36,7 @@ gaussian-splatting/
 .idea/
 Thumbs.db
 desktop.ini
+
+# Runtime output of tools/git_proxy_bypass.py; changes constantly.
+logs/git_relay.log
+logs/_repo_body*.json
