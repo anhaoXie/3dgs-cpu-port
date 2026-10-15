@@ -39,36 +39,55 @@ import asyncio
 import socket
 import sys
 
-# The reachable GitHub endpoint on this network.  Note that the address a
-# public resolver returns for github.com (20.205.243.166) is NOT reachable from
-# here, while 20.205.243.168 is -- and it serves both github.com and
-# api.github.com.  Verified with:
-#   curl --resolve api.github.com:443:20.205.243.168 https://api.github.com/  -> 200
-GITHUB_IP = "20.205.243.168"
+# Per-host endpoint overrides.
+#
+# These MUST be per-host.  github.com and api.github.com are different services
+# and are not interchangeable: 20.205.243.168 answers api.github.com with 200
+# but answers github.com with 400, and git then hangs forever with a connection
+# that is open but carries nothing.  Picking one address for "GitHub" cost a
+# 10-minute stall, so the mapping is explicit and github.com has failover.
+#
+# Verified reachability from this network (curl --resolve <host>:443:<ip>):
+#   20.27.177.113   github.com -> 200   (fastest: connect 0.11s)
+#   140.82.113.3    github.com -> 200
+#   140.82.121.3    github.com -> 200
+#   20.205.243.168  api.github.com -> 200
+#   20.205.243.166  unreachable, 140.82.112.3 unreachable
+GITHUB_ENDPOINTS: dict[str, list[str]] = {
+    "github.com": ["20.27.177.113", "140.82.113.3", "140.82.121.3"],
+    "api.github.com": ["20.205.243.168"],
+}
 
-GITHUB_HOSTS = (
-    "github.com",
-    "api.github.com",
-    "codeload.github.com",
-    "gist.github.com",
-    "githubapp.com",
-    "github.io",
-    "pages.github.com",
-)
-GITHUB_SUFFIXES = (
-    ".githubusercontent.com",
-    ".githubassets.com",
-)
+# Hosts that are hosts-file-blocked but NOT needed (and not worth guessing an IP
+# for).  Everything else is resolved normally by the OS.
+DEFAULT_PORT = 443
 
 BUFFER = 65536
 
 
-def pick_ip(host: str) -> str | None:
-    """Return the address to dial for *host*, or None to resolve normally."""
-    h = host.lower()
-    if h in GITHUB_HOSTS or h.endswith(GITHUB_SUFFIXES):
-        return GITHUB_IP
-    return None
+def endpoint_for(host: str) -> list[str] | None:
+    """Return candidate addresses to dial for *host*, or None to resolve normally."""
+    return GITHUB_ENDPOINTS.get(host.lower())
+
+
+async def dial(host: str, port: int):
+    """Open a connection to *host*, trying each known candidate in order."""
+    candidates = endpoint_for(host)
+    if candidates is None:
+        # Not a redirected host: let the OS resolve it.
+        return await asyncio.open_connection(host, port), host
+
+    last_exc: Exception | None = None
+    for ip in candidates:
+        try:
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(ip, port), timeout=15
+            )
+            return (reader, writer), ip
+        except Exception as exc:  # noqa: BLE001 - try the next candidate
+            last_exc = exc
+            print(f"  ! {host}: {ip} failed ({exc}); trying next", file=sys.stderr, flush=True)
+    raise ConnectionError(f"no reachable address for {host}: {last_exc}")
 
 
 async def pipe(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -121,14 +140,10 @@ async def handle(client_reader: asyncio.StreamReader,
     else:
         host, port = target, 443
 
-    ip = pick_ip(host)
     try:
-        remote_reader, remote_writer = await asyncio.wait_for(
-            asyncio.open_connection(ip or host, port), timeout=20
-        )
+        (remote_reader, remote_writer), dialled = await dial(host, port)
     except Exception as exc:  # noqa: BLE001 - report and close
-        print(f"  ! CONNECT {host}:{port} via {ip or 'dns'} failed: {exc}",
-              file=sys.stderr, flush=True)
+        print(f"  ! CONNECT {host}:{port} failed: {exc}", file=sys.stderr, flush=True)
         try:
             client_writer.write(b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
             await client_writer.drain()
@@ -137,8 +152,7 @@ async def handle(client_reader: asyncio.StreamReader,
         client_writer.close()
         return
 
-    print(f"  -> CONNECT {host}:{port}  dialling {ip or host}  (client {peer})",
-          flush=True)
+    print(f"  -> CONNECT {host}:{port}  dialling {dialled}  (client {peer})", flush=True)
 
     client_writer.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
     await client_writer.drain()
@@ -153,8 +167,9 @@ async def handle(client_reader: asyncio.StreamReader,
 async def main_async(port: int, host: str) -> None:
     server = await asyncio.start_server(handle, host, port)
     print(f"git proxy-bypass relay listening on {host}:{port}", flush=True)
-    print(f"  github hosts -> {GITHUB_IP}", flush=True)
-    print(f"  all other hosts are resolved normally", flush=True)
+    for h, ips in GITHUB_ENDPOINTS.items():
+        print(f"  {h:>18} -> {', '.join(ips)}", flush=True)
+    print("  all other hosts are resolved normally", flush=True)
     async with server:
         await server.serve_forever()
 
