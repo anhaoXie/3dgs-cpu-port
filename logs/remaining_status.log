@@ -1,0 +1,28 @@
+[01:40:32] remaining-delivery script started (pid 2756)
+[02:03:33] checkpoint 15000 present after 23.0 min (20.7 MB)
+[02:05:03] render train split @ 15000
+[02:06:51]   render exit=0
+[02:06:51] metrics(montage) train split @ 15000
+[02:12:36]   montage exit=0
+[02:12:36]     SSIM  mean=0.5941   (min 0.4656, max 0.7047)
+[02:12:36]     LPIPS mean=0.4144   (min 0.2985, max 0.5372)
+[02:12:36]   
+[02:12:36]   wrote montage <work>\notes\montage_train_15000.png  (1972x2206)
+[02:12:36]   (left column = 3DGS render, right column = ground truth)
+[02:12:36]   wrote single view <work>\notes\render_train_15000_view00000.png
+[02:12:36] loss curves @ 15000
+[02:12:44]   curves exit=0
+[04:00:45] checkpoint 30000 present after 108.0 min (20.7 MB)
+[04:02:15] render train split @ 30000
+[04:03:09]   render exit=0
+[04:03:09] metrics(montage) train split @ 30000
+[04:06:33]   montage exit=0
+[04:06:33]     SSIM  mean=0.5359   (min 0.3779, max 0.6832)
+[04:06:33]     LPIPS mean=0.4801   (min 0.3495, max 0.6162)
+[04:06:33]   
+[04:06:33]   wrote montage <work>\notes\montage_train_30000.png  (1972x2206)
+[04:06:33]   (left column = 3DGS render, right column = ground truth)
+[04:06:33]   wrote single view <work>\notes\render_train_30000_view00000.png
+[04:06:33] loss curves @ 30000
+[04:06:38]   curves exit=0
+[04:06:38] starting held-out (--eval) training at -r 4 / 7000 iters

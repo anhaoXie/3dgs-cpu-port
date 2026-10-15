@@ -1,0 +1,38 @@
+# ---------------------------------------------------------------------------
+# Never publish: large, machine-specific, or regenerable
+# ---------------------------------------------------------------------------
+
+# Python virtualenv (~971 MB: torch CPU wheels)
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Local wheel cache used to work around blocked PyPI (~110 MB)
+wheels/
+
+# TORCH_HOME cache: holds the 553 MB LPIPS/VGG16 checkpoint
+torch_home/
+
+# Matplotlib cache (only needed because %LOCALAPPDATA%\matplotlib is ACL-blocked)
+mplcache/
+
+# Training output: checkpoints + 251x3 rendered PNGs (~200 MB)
+output/
+
+# Tanks & Temples truck scene, COLMAP format (~182 MB, third-party data).
+# Fetch it with tools/fetch_truck.py instead of committing it.
+data/
+
+# Upstream repository, cloned separately and pinned to commit 54c035f.
+# Use tools/setup_upstream.ps1.  (It carries its own 170 MB .git and a
+# 79 MB assets/ tree, none of which belongs in this repository.)
+gaussian-splatting/
+
+# ---------------------------------------------------------------------------
+# Editor / OS noise
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
