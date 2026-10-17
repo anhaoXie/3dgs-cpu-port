@@ -178,9 +178,9 @@ $env:DSH_3DGS_BUDGET  = "16000000"
 |---|---|---|
 | `DSH_3DGS_THREADS` | torch 默认(8) | 设置 torch 线程数（本机 4/8 最优；`OMP_NUM_THREADS` 对该 torch 构建无效） |
 | `DSH_3DGS_KMAX` | 128 | 每 16×16 tile 保留的最近高斯数上限。**有效值是它与 `counts_max`、`BUDGET` 三者取小**。交付脚本用 256，但实测 256 **并不能**消除接缝，只有 1024 才可以——见《一处更正》 |
-| `DSH_3DGS_KMAX`=`auto` | — | 改成**按内存预算推导** K，而不是拍一个固定数字：取"预算装得下的最大 K"，再与 `counts_max`、`DSH_3DGS_KMAX_CEILING` 取小。**推荐用这个**，稀疏场景不会多花钱 |
+| `DSH_3DGS_KMAX`=`auto` | — | 改成**按内存预算推导** K，而不是拍一个固定数字：取"预算装得下的最大 K"，再与 `counts_max`、`DSH_3DGS_KMAX_CEILING` 取小。**渲染推荐用这个**，稀疏场景不会多花钱 |
 | `DSH_3DGS_KMAX_MEM_MB` | 2048 | `auto` 模式下 `[T,256,K]` 张量的内存预算（MiB） |
-| `DSH_3DGS_KMAX_TENSORS` | 8 | `auto` 模式下假设峰值同时存活的 `[T,256,K]` 张量个数（由代码结构估算，可覆盖） |
+| `DSH_3DGS_KMAX_TENSORS` | 8 | `auto` 模式下假设峰值同时存活的 `[T,256,K]` 张量个数。**这个 8 只对推理成立**（`no_grad`）；训练带 autograd 时要显著调大，否则会过选 K 并触发换页——实测见消融文档 §11 |
 | `DSH_3DGS_KMAX_CEILING` | 16384 | `auto` 模式下的硬上限 |
 | `DSH_3DGS_BUDGET` | 6e6 | `[T,256,K]` 稠密张量的元素总量上限，用于约束内存。**注意它会反过来钳住 K**：245×136 有 144 个 tile，默认 6e6 只允许 `BUDGET//(144×256) = 162`；要真正用上 K=1024，必须**同时**把 BUDGET 抬到 ≥37748736。`auto` 模式下此项不参与，以内存预算为准 |
 

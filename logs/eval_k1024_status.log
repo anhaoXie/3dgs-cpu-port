@@ -1,0 +1,4 @@
+[16:07:10] K=1024 held-out retrain started (pid 54964, budget=37748736)
+[16:07:11]   model dir: C:\Users\Ð»°²ºÀ\Documents\deepseek-harness\default-workspace\3dgs\output\truck_eval_k1024
+[16:07:11] removing stale C:\Users\Ð»°²ºÀ\Documents\deepseek-harness\default-workspace\3dgs\output\truck_eval_k1024
+[16:07:11] training: -r 4 --eval, 7000 iterations, upstream densification defaults, K=1024
