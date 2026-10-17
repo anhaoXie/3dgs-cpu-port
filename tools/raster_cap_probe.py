@@ -57,6 +57,8 @@ def main():
     ap.add_argument("--iteration", type=int, required=True)
     ap.add_argument("--split", choices=["train", "test"], default="train")
     ap.add_argument("--view", type=int, default=0)
+    ap.add_argument("--save-image", default=None,
+                    help="also write the rendered view to this PNG, for seam_metric.py")
     args = get_combined_args(ap)
 
     dataset = mp.extract(args)
@@ -71,16 +73,30 @@ def main():
     bg = torch.tensor([1.0, 1.0, 1.0] if dataset.white_background else [0.0, 0.0, 0.0],
                       dtype=torch.float32)
 
-    kmax_env = int(os.environ.get("DSH_3DGS_KMAX", "128"))
+    kmax_raw = os.environ.get("DSH_3DGS_KMAX", "128").strip()
     budget = int(os.environ.get("DSH_3DGS_BUDGET", "6000000"))
 
     print(f"\n--- checkpoint {args.iteration}, {args.split} camera #{args.view} ---")
     print(f"    gaussians in model      : {gaussians.get_xyz.shape[0]:,}")
-    print(f"    DSH_3DGS_KMAX           : {kmax_env}")
+    print(f"    DSH_3DGS_KMAX           : {kmax_raw}")
+    if kmax_raw.lower() == "auto":
+        print(f"    auto memory budget      : {os.environ.get('DSH_3DGS_KMAX_MEM_MB', '2048')} MiB"
+              f" x{os.environ.get('DSH_3DGS_KMAX_TENSORS', '8')} live tensors,"
+              f" ceiling {os.environ.get('DSH_3DGS_KMAX_CEILING', '16384')}")
     print(f"    DSH_3DGS_BUDGET         : {budget:,}")
     # The rasterizer's own line follows; it prints counts_max and the derived kmax.
     with torch.no_grad():
-        render(cam, gaussians, pp.extract(args), bg)
+        out = render(cam, gaussians, pp.extract(args), bg)
+
+    if args.save_image:
+        import numpy as np
+        from PIL import Image
+        # render() clamps to [0, 1] (gaussian_renderer/__init__.py:119)
+        arr = (out["render"].clamp(0.0, 1.0).mul(255.0)
+               .byte().permute(1, 2, 0).cpu().numpy())
+        os.makedirs(os.path.dirname(os.path.abspath(args.save_image)), exist_ok=True)
+        Image.fromarray(arr).save(args.save_image)
+        print(f"    wrote                   : {args.save_image}")
 
 
 if __name__ == "__main__":

@@ -78,10 +78,50 @@ ALPHA_MIN = 1.0 / 255.0                   # cuda: `if (alpha < 1/255) continue`
 ALPHA_MAX = 0.99                          # cuda: `min(0.99f, ...)`
 
 # Tuning knobs (performance only -- they do not change the algorithm)
-_KMAX_DEFAULT = int(os.environ.get("DSH_3DGS_KMAX", "128"))
+#
+# K_MAX caps how many candidate gaussians each 16x16 tile may keep.  The CUDA
+# kernel has no such cap -- it walks every candidate.  On CPU that is impossible
+# at realistic density: the compositing block materialises several float32
+# [n_tiles, 256, K] tensors at once, and the busiest tile routinely sees far more
+# candidates than a fixed K can hold (measured with tools/raster_cap_probe.py:
+# ~11k at 245x136 on the truck scene at iteration 15000, ~20-38k at the smoke
+# resolution).  A fixed K=256 therefore discards ~97% of the busiest tile and
+# leaves visible 16x16 seams -- see notes/kmax-ablation.md.
+#
+# So a fixed number is arbitrary.  "auto" instead derives K from a memory budget:
+#   DSH_3DGS_KMAX=auto       derive K from the budget below (never exceeds the
+#                            candidates actually present, so sparse scenes stay cheap)
+#   DSH_3DGS_KMAX_MEM_MB     MiB to spend on the [n_tiles, 256, K] tensors (default 2048)
+#   DSH_3DGS_KMAX_CEILING    hard upper bound even when memory would allow more
+#   DSH_3DGS_KMAX_TENSORS    how many such tensors are live at peak (default 8)
+#
+# The default stays the old fixed 128, so existing runs reproduce byte-for-byte.
+_KMAX_ENV = os.environ.get("DSH_3DGS_KMAX", "128").strip()
+_KMAX_AUTO = _KMAX_ENV.lower() == "auto"
+_KMAX_DEFAULT = 128 if _KMAX_AUTO else int(_KMAX_ENV)
+_KMAX_AUTO_MIB = float(os.environ.get("DSH_3DGS_KMAX_MEM_MB", "2048"))
+_KMAX_CEILING = int(os.environ.get("DSH_3DGS_KMAX_CEILING", "16384"))
+_KMAX_LIVE_TENSORS = float(os.environ.get("DSH_3DGS_KMAX_TENSORS", "8"))
 _BUDGET_DEFAULT = int(os.environ.get("DSH_3DGS_BUDGET", "6000000"))
 _DEBUG = bool(os.environ.get("DSH_3DGS_DEBUG", ""))
 _PROFILE = bool(os.environ.get("DSH_3DGS_PROFILE", ""))
+
+
+def resolve_kmax(n_tiles, counts_max):
+    """Return (effective per-tile cap, legacy element budget).
+
+    In auto mode the cap is the largest K whose dense tensors fit the memory
+    budget, further bounded by the candidates actually present and by a ceiling.
+    In fixed mode this is exactly the previous behaviour: min(K_MAX, counts_max),
+    then clamped by the legacy DSH_3DGS_BUDGET element budget.
+    """
+    legacy_budget = max(1, _BUDGET_DEFAULT // (n_tiles * BLOCK_SIZE))
+    if _KMAX_AUTO:
+        bytes_per_k = _KMAX_LIVE_TENSORS * n_tiles * BLOCK_SIZE * 4.0
+        by_mem = int(_KMAX_AUTO_MIB * 1024 * 1024 / max(bytes_per_k, 1.0))
+        # Memory is the authority in auto mode, so the legacy budget is not applied.
+        return max(1, min(counts_max, by_mem, _KMAX_CEILING)), legacy_budget
+    return max(1, min(min(_KMAX_DEFAULT, counts_max), legacy_budget)), legacy_budget
 
 # Simple phase profiler (opt-in via DSH_3DGS_PROFILE=1).  It only ever measures
 # wall time around existing code; it cannot change results.
@@ -440,11 +480,7 @@ def _rasterize(means3D, means2D, sh, colors_precomp, opacities, scales,
             counts = torch.bincount(pair_tile, minlength=n_tiles)
             counts_max = int(counts.max().item())
 
-            kmax = min(_KMAX_DEFAULT, counts_max)
-            # Bound the size of the dense [T, 256, K] tensors to a fixed
-            # element budget so that memory stays predictable on a CPU-only box.
-            kmax_budget = max(1, _BUDGET_DEFAULT // (n_tiles * BLOCK_SIZE))
-            kmax = max(1, min(kmax, kmax_budget))
+            kmax, kmax_budget = resolve_kmax(n_tiles, counts_max)
 
             offsets = torch.cumsum(counts, 0) - counts
             rank_in_tile = torch.arange(total, dtype=torch.int64) - offsets[pair_tile]
@@ -467,8 +503,11 @@ def _rasterize(means3D, means2D, sh, colors_precomp, opacities, scales,
             in_img = (pix_y < H) & (pix_x < W)
 
             if _DEBUG:
+                mode = (f"auto({_KMAX_AUTO_MIB:.0f}MiB x{_KMAX_LIVE_TENSORS:.0f})"
+                        if _KMAX_AUTO else str(_KMAX_DEFAULT))
                 print(f"[cpu-raster] N={N} kept={kidx.numel()} pairs={total} "
-                      f"tiles={n_tiles} counts_max={counts_max} kmax={kmax}")
+                      f"tiles={n_tiles} counts_max={counts_max} kmax={kmax} "
+                      f"cap_mode={mode} legacy_budget={kmax_budget}")
 
     if cand is None:
         if _PROFILE:

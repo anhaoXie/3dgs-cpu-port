@@ -514,8 +514,57 @@ def test_means2d_grad():
         check("means2D.grad 3rd column is zero", float(g[:, 2].abs().sum()) == 0.0)
 
 
+def test_resolve_kmax():
+    """resolve_kmax must stay a pure, predictable function of (n_tiles, counts_max).
+
+    The cap is the one knob that genuinely trades quality for memory, so its
+    resolution rule is locked here rather than left to prose in the README.
+    """
+    import json
+    import subprocess
+
+    probe = r'''
+import importlib, json, os
+from diff_gaussian_rasterization import resolve_kmax as rk
+out = {"fixed_11104": list(rk(144, 11104)),
+       "fixed_5": list(rk(144, 5)),
+       "fixed_0": list(rk(144, 0))}
+os.environ["DSH_3DGS_KMAX"] = "auto"
+os.environ["DSH_3DGS_KMAX_MEM_MB"] = "2048"
+import diff_gaussian_rasterization as m
+m = importlib.reload(m)
+out["auto_11104"] = list(m.resolve_kmax(144, 11104))
+print(json.dumps(out))
+'''
+    # Inherit PATH/PYTHONPATH, but not a caller's cap settings: this test asserts
+    # the documented defaults.
+    env = {k: v for k, v in os.environ.items() if not k.startswith("DSH_3DGS_")}
+    r = subprocess.run([sys.executable, "-c", probe], capture_output=True,
+                       text=True, env=env)
+    check("resolve_kmax probe ran", r.returncode == 0,
+          (r.stderr or "").strip()[-300:])
+    if r.returncode != 0:
+        return
+    d = json.loads(r.stdout.strip().splitlines()[-1])
+
+    legacy = 6_000_000 // (144 * 256)      # 162 on a 245x136 image
+    check("legacy element budget is 162", d["fixed_11104"][1] == legacy,
+          f'{d["fixed_11104"][1]} vs {legacy}')
+    check("fixed mode caps at the default K_MAX=128", d["fixed_11104"][0] == 128,
+          f'k={d["fixed_11104"][0]}')
+    check("sparse scene keeps all its candidates", d["fixed_5"][0] == 5,
+          f'k={d["fixed_5"][0]}')
+    check("empty scene still yields a usable cap", d["fixed_0"][0] >= 1,
+          f'k={d["fixed_0"][0]}')
+    auto_k = d["auto_11104"][0]
+    # 2 GiB / (8 tensors x 144 tiles x 256 px x 4 B) = 1820
+    check("auto mode derives ~1820 at a 2 GiB budget", 1700 <= auto_k <= 1900,
+          f"k={auto_k}")
+
+
 if __name__ == "__main__":
-    for fn in (test_sh, test_naive_parity, test_gradcheck, test_means2d_grad):
+    for fn in (test_sh, test_naive_parity, test_gradcheck, test_means2d_grad,
+               test_resolve_kmax):
         try:
             fn()
         except Exception as exc:

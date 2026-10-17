@@ -434,3 +434,77 @@ smoke 模型按它自己的 `cfg_args`（`resolution=8` → 122×68，**40** 个
 **（a）被测量必须直接对应目标现象**（`seam_metric.py` 按 tile 网格分别统计梯度）；
 **（b）在最终交付检查点上复验**；
 **（c）给出可证伪的对照**（K=2048 收敛档，证明差异确实来自 K）。
+
+---
+
+## 10. 修复：把武断的数字换成内存预算
+
+前面九节都在量化"固定 K 有多糟"。但"应该取多少"这个问题问错了——
+正确的问法是**"这台机器能花多少内存"**，然后让 K 去填满它。
+
+`K_MAX` 之所以存在，纯粹是因为 CPU 上 `[T,256,K]` 稠密张量放不下
+（见 8.4）。那就直接以内存为自变量：给定预算 `MEM_MiB`、tile 数 `T`、
+每个张量 `T×256×K` 个 float32，若峰值同时存活 `m` 个这样的张量，则
+
+```
+K = floor( MEM_MiB × 1024² / (m × T × 256 × 4) )
+K = min(K, counts_max, CEILING)
+```
+
+### 10.1 实现
+
+`cpu_port/diff_gaussian_rasterization/__init__.py` 里新增 `resolve_kmax()`，
+并在光栅化入口用它替换原来的两行取小：
+
+```python
+def resolve_kmax(n_tiles, counts_max):
+    legacy_budget = max(1, _BUDGET_DEFAULT // (n_tiles * BLOCK_SIZE))
+    if _KMAX_AUTO:
+        bytes_per_k = _KMAX_LIVE_TENSORS * n_tiles * BLOCK_SIZE * 4.0
+        by_mem = int(_KMAX_AUTO_MIB * 1024 * 1024 / max(bytes_per_k, 1.0))
+        return max(1, min(counts_max, by_mem, _KMAX_CEILING)), legacy_budget
+    return max(1, min(min(_KMAX_DEFAULT, counts_max), legacy_budget)), legacy_budget
+```
+
+启用方式（`DSH_3DGS_KMAX` 默认仍是固定的 `128`，旧结果逐位可复现）：
+
+```powershell
+$env:DSH_3DGS_KMAX        = "auto"
+$env:DSH_3DGS_KMAX_MEM_MB = "2048"
+```
+
+### 10.2 预算换算出的 K（truck，245×136，144 个 tile）
+
+| `DSH_3DGS_KMAX_MEM_MB` | 推导出的 K | 与 `counts_max`=11,104 的关系 |
+|---|---|---|
+| 512 | 455 | 仍截断 |
+| 2048 | 1,820 | 仍截断，但已越过收敛区 |
+| 8192 | 7,281 | 仍略低于 11,104 |
+
+作为对照，旧路径的 `legacy_budget` 在这台机器上只有 **162**——这就是为什么
+不抬 `DSH_3DGS_BUDGET` 时 K 永远上不去。`auto` 模式下该预算不再参与。
+
+### 10.3 验证：auto 复现了 K=2048 的收敛画质
+
+固定 view 51、同一次迭代（15000）、只改 K，用 `seam_metric.py` 量同一张图上
+的 tile 边界梯度比（1.0 = 干净）：
+
+| 配置 | 实际 K | H 比率 | V 比率 |
+|---|---|---|---|
+| 固定 256 | 256 | 3.666 | 2.136 |
+| 固定 1024 | 1,024 | 1.553 | 1.087 |
+| 固定 2048 | 2,048 | 1.254 | 1.045 |
+| **auto，2 GiB** | **1,820** | **1.254** | **1.048** |
+
+`auto` 用 1820 就拿到了 2048 的效果——因为超过收敛点之后 K 本来就不再是瓶颈。
+（单视图的数字比 §4 的 251 视图均值更重，因为 view 51 是较难的视角；
+两者只用于同条件 A/B，不要跨表比较。）
+
+### 10.4 局限，写清楚
+
+- `DSH_3DGS_KMAX_TENSORS`（默认 8）是**按代码结构估算**的峰值存活张量数，
+  不是实测值。它直接线性影响推导出的 K：高估则偏保守，低估则可能 OOM。
+  它作为环境变量暴露出来，就是为了让使用者在自己的机器上校准。
+- 预算是**建议值**，不是硬保护。真的超了，你会拿到 OOM 而不是优雅降级。
+- 本文所有已发布数字仍然来自**固定 K**，因为那是可复现的；
+  `auto` 是"下一轮该怎么跑"的建议，不是对既有结果的替换。
