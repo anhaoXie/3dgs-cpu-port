@@ -1,0 +1,36 @@
+[07:20:20] held-out re-run started (pid 56800)
+[07:20:20] removing partial output\truck_eval from the previous attempt
+[07:20:20] training with --eval (every 8th camera held out), -r 4, 7000 iterations
+[08:12:26]   train exit=0  elapsed=52.1 min
+[08:12:26] sanity: how many cameras landed in each split?
+[08:12:28]       super().__init__(parser, "Loading Parameters", sentinel)
+[08:12:28]     File "<work>\gaussian-splatting\arguments\__init__.py", line 
+[08:12:28]   21, in __init__
+[08:12:28]       group = parser.add_argument_group(name)
+[08:12:28]               ^^^^^^^^^^^^^^^^^^^^^^^^^
+[08:12:28]   AttributeError: 'Namespace' object has no attribute 'add_argument_group'
+[08:12:28] render.py (renders both splits)
+[08:13:14]   render exit=0
+[08:13:14] official metrics.py  <-- the actual deliverable of this run
+[08:13:41]   metrics.py exit=0
+[08:13:41]   Metric evaluation progress:  88%|¨€¨€¨€¨€¨€¨€¨€¨€¨‚ | 28/32 [00:20<00:02,  1.38it/s]
+[08:13:41]   Metric evaluation progress:  91%|¨€¨€¨€¨€¨€¨€¨€¨€¨€ | 29/32 [00:21<00:02,  1.38it/s]
+[08:13:41]   Metric evaluation progress:  94%|¨€¨€¨€¨€¨€¨€¨€¨€¨€¨…| 30/32 [00:22<00:01,  1.36it/s]
+[08:13:41]   Metric evaluation progress:  97%|¨€¨€¨€¨€¨€¨€¨€¨€¨€¨ƒ| 31/32 [00:23<00:00,  1.34it/s]
+[08:13:41]   Metric evaluation progress: 100%|¨€¨€¨€¨€¨€¨€¨€¨€¨€¨€| 32/32 [00:23<00:00,  1.36it/s]
+[08:13:41]   Metric evaluation progress: 100%|¨€¨€¨€¨€¨€¨€¨€¨€¨€¨€| 32/32 [00:23<00:00,  1.34it/s]
+[08:13:41]     SSIM :    0.5234814
+[08:13:41]     PSNR :   15.2788954
+[08:13:41]     LPIPS:    0.4639251
+[08:13:41]   
+[08:13:41] montage + full-metric recompute on the test split
+[08:14:08]   montage exit=0
+[08:14:09]     SSIM  mean=0.5235   (min 0.4054, max 0.6171)
+[08:14:09]     LPIPS mean=0.4639   (min 0.3708, max 0.5389)
+[08:14:09]   
+[08:14:09]   wrote montage <work>\notes\montage_test_7000.png  (1972x2206)
+[08:14:09]   (left column = 3DGS render, right column = ground truth)
+[08:14:09]   wrote single view <work>\notes\render_test_7000_view00000.png
+[08:14:09] loss curves for the eval run
+[08:14:13]   curves exit=0
+[08:14:13] HELD-OUT RUN COMPLETE

@@ -26,6 +26,14 @@ USER = Path.home().name                                # e.g. the Windows accoun
 
 SEP = r"[\\/]+"
 
+# The name can also appear JSON-escaped.  json.dump(ensure_ascii=True) writes
+# non-ASCII characters as \uXXXX, so a path inside a .json file reads
+#   "<home>\\Documents\\..."
+# -- the literal characters never appear, and a plain substring search for the
+# name finds nothing.  That is exactly how the first scrub pass missed this.
+ESCAPED_USER = "".join(f"\\u{ord(_c):04x}" for _c in USER)
+_escaped_variants = [ESCAPED_USER, ESCAPED_USER.upper().replace("\\U", "\\u")]
+
 # The mojibake this user name turns into when its UTF-8 bytes are decoded as GBK.
 #
 # Derived rather than hardcoded: a hardcoded version had a wrong code point and
@@ -59,6 +67,11 @@ RULES: list[tuple[re.Pattern[str], str]] = [
         "<home>",
     ),
 ]
+
+# JSON-escaped occurrences, then collapse the now-orphaned path prefix.
+for _esc in _escaped_variants:
+    RULES.append((re.compile(re.escape(_esc)), "<user>"))
+RULES.append((re.compile(r"C:" + SEP + r"Users" + SEP + r"<user>", re.IGNORECASE), "<home>"))
 
 for _m in _moji_variants:
     RULES.append((re.compile(re.escape(_m)), "<mojibake>"))

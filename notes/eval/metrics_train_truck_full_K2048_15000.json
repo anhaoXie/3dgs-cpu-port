@@ -1,0 +1,13 @@
+{
+  "model": "<home>\\Documents\\deepseek-harness\\default-workspace\\3dgs\\output\\truck_full_k2048",
+  "split": "train",
+  "iteration": 15000,
+  "views": 251,
+  "resolution": [
+    245,
+    136
+  ],
+  "PSNR": 17.762009825839463,
+  "SSIM": 0.6350670212293527,
+  "LPIPS": 0.35118674483907175
+}

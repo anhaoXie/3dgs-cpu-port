@@ -27,6 +27,9 @@ def main():
     ap.add_argument("--split", default="train")
     ap.add_argument("--views", type=int, nargs="*", default=None)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--single-out", default=None,
+                    help="where to write the upscaled single view (default: notes/render_<split>_<iter>_view00000.png). "
+                         "Set this when probing an ablation, so the delivery image is not overwritten.")
     ap.add_argument("--scale", type=int, default=4)
     args = ap.parse_args()
 
@@ -103,7 +106,9 @@ def main():
     print("(left column = 3DGS render, right column = ground truth)")
 
     # also save one full-resolution single view for the deliverable
-    single = os.path.join(WORK, "notes", f"render_{args.split}_{args.iteration}_view{idxs[0]:05d}.png")
+    single = args.single_out or os.path.join(
+        WORK, "notes", f"render_{args.split}_{args.iteration}_view{idxs[0]:05d}.png")
+    os.makedirs(os.path.dirname(single), exist_ok=True)
     Image.open(os.path.join(rdir, names[idxs[0]])).convert("RGB").resize(
         (Image.open(os.path.join(rdir, names[idxs[0]])).width * args.scale,
          Image.open(os.path.join(rdir, names[idxs[0]])).height * args.scale),

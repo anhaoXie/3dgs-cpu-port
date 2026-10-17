@@ -1,0 +1,13 @@
+{
+  "model": "<home>\\Documents\\deepseek-harness\\default-workspace\\3dgs\\output\\truck_eval_k1024",
+  "split": "test",
+  "iteration": 7000,
+  "views": 32,
+  "resolution": [
+    245,
+    136
+  ],
+  "PSNR": 15.396952450275421,
+  "SSIM": 0.5673830667510629,
+  "LPIPS": 0.3990547517314553
+}

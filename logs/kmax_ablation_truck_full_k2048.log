@@ -1,0 +1,16 @@
+[09:25:51] K_MAX ablation: source=truck_full checkpoint=15000 K=2048 BUDGET=75497472 (kmax_budget=2048)
+[09:25:51] prepared <work>\output\truck_full_k2048
+[09:25:51] render train @ 15000 with K=2048
+[09:29:28]   render exit=0  elapsed=3.6 min
+[09:29:28] metrics: train split
+[09:32:36]   metrics exit=0
+[09:32:36]   views 251   resolution 245x136 (render pixels)
+[09:32:36]   PSNR  mean=17.7620   (min 12.1892, max 19.9865)
+[09:32:36]   SSIM  mean=0.6351   (min 0.5048, max 0.7299)
+[09:32:36]   LPIPS mean=0.3512   (min 0.2595, max 0.4685)
+[09:32:36] montage for visual comparison
+[09:35:44]   montage exit=0
+[09:35:44] seam metric (boundary/interior gradient ratio)
+[09:35:46]   render dir                                     views   H-bound      H-in  H ratio   V-bound      V-in  V ratio
+[09:35:46]   ours_15000/renders                               251    4.4673    4.2807    1.044    6.7373    6.5735    1.025
+[09:35:46] ABLATION COMPLETE (truck_full, K=2048)
